@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import streamlit as st
 import os
 import tempfile
-from webdriver_manager.chrome import ChromeDriverManager  # Добавлен импорт
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Настройка страницы Streamlit
 st.set_page_config(page_title="Парсер Яндекс.Карт", page_icon="🗺️")
@@ -35,31 +35,40 @@ def parse_yandex_maps(url, driver):
     """Парсинг данных с Яндекс.Карт"""
     driver.get(url)
     time.sleep(random.uniform(2, 4))
+    
     def get_text(xpath, default="Не найден"):
         try:
-            return WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, xpath))).text
+            element = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, xpath)))
+            return element.text if element.text else default
         except:
             return default
+    
     def get_phone(xpath, default="Не найден"):
         try:
-            phone = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, xpath))).text
-            return phone.split("\n")[0]
+            element = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, xpath)))
+            phone = element.text
+            if phone:  # Проверяем, что phone не None и не пустой
+                return phone.split("\n")[0]
+            return default
         except:
             return default
+    
     try:
         rating_element = WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.XPATH, "//span[contains(@class, 'business-rating-badge-view__rating-text')]"))
         )
-        rating = rating_element.text
+        rating = rating_element.text if rating_element.text else "Не найдено"
     except:
         rating = "Не найдено"
+    
     try:
         reviews_element = WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.XPATH, "//div[contains(@class, 'business-header-rating-view__text')]"))
         )
-        reviews = reviews_element.get_attribute("aria-label").strip()
+        reviews = reviews_element.get_attribute("aria-label").strip() if reviews_element.get_attribute("aria-label") else "Не найдено"
     except:
         reviews = "Не найдено"
+    
     data = {
         "Ссылка": url,
         "Название": get_text("//h1"),
@@ -84,12 +93,9 @@ def process_file(uploaded_file):
         results = [parse_yandex_maps(url, driver) for url in urls]
         driver.quit()
         df_result = pd.DataFrame(results)
-        
-        # Используем временный файл
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             output_path = tmp.name
             df_result.to_excel(output_path, index=False)
-        
         return output_path, "✅ Данные сохранены в yandex_maps_data.xlsx"
     except Exception as e:
         if 'driver' in locals():
@@ -111,5 +117,4 @@ if uploaded_file is not None:
                         file_name="yandex_maps_data.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-                # Удаляем временный файл после скачивания
                 os.unlink(output_path)
